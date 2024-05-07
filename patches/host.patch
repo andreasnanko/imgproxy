@@ -1,0 +1,93 @@
+diff --git a/extract_host.go b/extract_host.go
+new file mode 100644
+index 0000000..4200bf2
+--- /dev/null
++++ b/extract_host.go
+@@ -0,0 +1,19 @@
++package main
++
++import (
++	"regexp"
++)
++
++var hostDomainRe = regexp.MustCompile(`/host:([^/]+)`)
++
++func extractHost(path string) (string, string) {
++    matches := hostDomainRe.FindStringSubmatch(path)
++    if len(matches) < 2 {
++        return "", path
++    }
++    domain := matches[1]
++
++    remaining := hostDomainRe.ReplaceAllString(path, "")
++
++    return domain, remaining
++}
+diff --git a/imagedata/download.go b/imagedata/download.go
+index e46c92d..7157606 100644
+--- a/imagedata/download.go
++++ b/imagedata/download.go
+@@ -46,6 +46,7 @@ const msgSourceImageIsUnreachable = "Source image is unreachable"
+ type DownloadOptions struct {
+ 	Header    http.Header
+ 	CookieJar *cookiejar.Jar
++	Host	  string
+ }
+ 
+ type ErrorNotModified struct {
+@@ -130,10 +131,12 @@ func headersToStore(res *http.Response) map[string]string {
+ 	return m
+ }
+ 
+-func BuildImageRequest(ctx context.Context, imageURL string, header http.Header, jar *cookiejar.Jar) (*http.Request, context.CancelFunc, error) {
++func BuildImageRequest(ctx context.Context, imageURL string, header http.Header, jar *cookiejar.Jar, host string) (*http.Request, context.CancelFunc, error) {
+ 	reqCtx, reqCancel := context.WithTimeout(ctx, time.Duration(config.DownloadTimeout)*time.Second)
+ 
+ 	req, err := http.NewRequestWithContext(reqCtx, "GET", imageURL, nil)
++	req.Host = host
++
+ 	if err != nil {
+ 		reqCancel()
+ 		return nil, func() {}, ierrors.New(404, err.Error(), msgSourceImageIsUnreachable)
+@@ -190,7 +193,7 @@ func SendRequest(req *http.Request) (*http.Response, error) {
+ }
+ 
+ func requestImage(ctx context.Context, imageURL string, opts DownloadOptions) (*http.Response, context.CancelFunc, error) {
+-	req, reqCancel, err := BuildImageRequest(ctx, imageURL, opts.Header, opts.CookieJar)
++	req, reqCancel, err := BuildImageRequest(ctx, imageURL, opts.Header, opts.CookieJar, opts.Host)
+ 	if err != nil {
+ 		reqCancel()
+ 		return nil, func() {}, err
+diff --git a/processing_handler.go b/processing_handler.go
+index eb2f9a2..83d0be4 100644
+--- a/processing_handler.go
++++ b/processing_handler.go
+@@ -233,6 +233,7 @@ func handleProcessing(reqID string, rw http.ResponseWriter, r *http.Request) {
+ 		))
+ 	}
+ 
++	host, path := extractHost(path)
+ 	path = fixPath(path)
+ 
+ 	if err := security.VerifySignature(signature, path); err != nil {
+@@ -309,6 +310,7 @@ func handleProcessing(reqID string, rw http.ResponseWriter, r *http.Request) {
+ 		downloadOpts := imagedata.DownloadOptions{
+ 			Header:    imgRequestHeader,
+ 			CookieJar: nil,
++			Host: host,
+ 		}
+ 
+ 		if config.CookiePassthrough {
+diff --git a/stream.go b/stream.go
+index b6c895f..540aa47 100644
+--- a/stream.go
++++ b/stream.go
+@@ -70,7 +70,7 @@ func streamOriginImage(ctx context.Context, reqID string, r *http.Request, rw ht
+ 		checkErr(ctx, "streaming", err)
+ 	}
+ 
+-	req, reqCancel, err := imagedata.BuildImageRequest(r.Context(), imageURL, imgRequestHeader, cookieJar)
++	req, reqCancel, err := imagedata.BuildImageRequest(r.Context(), imageURL, imgRequestHeader, cookieJar, "")
+ 	defer reqCancel()
+ 	checkErr(ctx, "streaming", err)
+ 
