@@ -1,4 +1,6 @@
-FROM ubuntu:mantic
+FROM public.ecr.aws/ubuntu/ubuntu:noble
+
+ARG VIPS_VERSIONS="8.14 8.15 8.16"
 
 RUN apt-get -qq update \
   && apt-get install -y --no-install-recommends \
@@ -20,14 +22,6 @@ RUN apt-get -qq update \
     librsvg2-dev \
     libexif-dev \
     liblcms2-dev \
-    libavcodec-dev \
-    libavformat-dev \
-    libavutil-dev \
-    libswscale-dev \
-    libopencv-core-dev \
-    libopencv-imgproc-dev \
-    libopencv-objdetect-dev \
-    libopencv-dnn-dev \
   && python3 -m venv /root/.python \
   && /root/.python/bin/pip install meson ninja \
   && rm -rf /var/lib/apt/lists/*
@@ -38,7 +32,7 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y \
   && cd /root \
   && git clone --depth 1 https://github.com/DarthSim/quantizr.git \
   && cd quantizr \
-  && cargo cinstall --release --library-type=cdylib \
+  && cargo cinstall --release --library-type=cdylib --prefix=/usr/local --libdir=/usr/local/lib \
   && rm -rf /root/.rustup /root/.cargo
 
 ENV PATH="/root/.python/bin:$PATH"
@@ -48,7 +42,7 @@ RUN \
   mkdir /root/vips \
     && cd /root/vips \
     && curl -s -S -L -o vips_releases.json "https://api.github.com/repos/libvips/libvips/releases" \
-    && for VIPS_VERSION in "8.13" "8.14" "8.15"; do \
+    && for VIPS_VERSION in $VIPS_VERSIONS; do \
       mkdir $VIPS_VERSION \
       && export VIPS_RELEASE=$(grep -m 1 "\"tag_name\": \"v$VIPS_VERSION." vips_releases.json | sed -E 's/.*"v([^"]+)".*/\1/') \
       && echo "Building Vips $VIPS_RELEASE as $VIPS_VERSION" \
@@ -66,14 +60,6 @@ RUN \
       && cd .. \
       && rm -rf libvips-$VIPS_RELEASE.tar.gz libvips-$VIPS_RELEASE; \
     done
-
-RUN echo "Name: OpenCV\n" \
-  "Description: Open Source Computer Vision Library\n" \
-  "Version: 4.5.1\n" \
-  "Libs: -L/usr/lib/x86_64-linux-gnu -lopencv_dnn -lopencv_objdetect -lopencv_imgproc -lopencv_core\n" \
-  "Libs.private: -ldl -lm -lpthread -lrt\n" \
-  "Cflags: -I/usr/include/opencv4\n" \
-  > /usr/lib/x86_64-linux-gnu/pkgconfig/opencv4.pc
 
 WORKDIR /go/src
 

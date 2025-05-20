@@ -15,6 +15,7 @@ import (
 
 	"github.com/imgproxy/imgproxy/v3/config"
 	"github.com/imgproxy/imgproxy/v3/httprange"
+	"github.com/imgproxy/imgproxy/v3/transport/common"
 	"github.com/imgproxy/imgproxy/v3/transport/notmodified"
 )
 
@@ -29,10 +30,13 @@ func New() transport {
 func (t transport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	header := make(http.Header)
 
-	f, err := t.fs.Open(req.URL.Path)
+	_, path, _ := common.GetBucketAndKey(req.URL)
+	path = "/" + path
+
+	f, err := t.fs.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return respNotFound(req, fmt.Sprintf("%s doesn't exist", req.URL.Path)), nil
+			return respNotFound(req, fmt.Sprintf("%s doesn't exist", path)), nil
 		}
 		return nil, err
 	}
@@ -43,7 +47,7 @@ func (t transport) RoundTrip(req *http.Request) (resp *http.Response, err error)
 	}
 
 	if fi.IsDir() {
-		return respNotFound(req, fmt.Sprintf("%s is directory", req.URL.Path)), nil
+		return respNotFound(req, fmt.Sprintf("%s is directory", path)), nil
 	}
 
 	statusCode := 200
@@ -75,7 +79,7 @@ func (t transport) RoundTrip(req *http.Request) (resp *http.Response, err error)
 
 	default:
 		if config.ETagEnabled {
-			etag := BuildEtag(req.URL.Path, fi)
+			etag := BuildEtag(path, fi)
 			header.Set("ETag", etag)
 		}
 
@@ -118,7 +122,7 @@ func respNotFound(req *http.Request, msg string) *http.Response {
 		Proto:         "HTTP/1.0",
 		ProtoMajor:    1,
 		ProtoMinor:    0,
-		Header:        make(http.Header),
+		Header:        http.Header{"Content-Type": {"text/plain"}},
 		ContentLength: int64(len(msg)),
 		Body:          io.NopCloser(strings.NewReader(msg)),
 		Close:         false,

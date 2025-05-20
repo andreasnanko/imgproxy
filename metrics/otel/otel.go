@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"go.opentelemetry.io/contrib/propagators/aws/xray"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -34,10 +36,9 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-	"go.opentelemetry.io/otel/semconv/v1.17.0/httpconv"
+	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
+	"go.opentelemetry.io/otel/semconv/v1.20.0/httpconv"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/imgproxy/imgproxy/v3/config"
@@ -236,13 +237,8 @@ func mapDeprecatedConfig() {
 }
 
 func buildGRPCExporters() (*otlptrace.Exporter, sdkmetric.Exporter, error) {
-	tracerOpts := []otlptracegrpc.Option{
-		otlptracegrpc.WithDialOption(grpc.WithBlock()),
-	}
-
-	meterOpts := []otlpmetricgrpc.Option{
-		otlpmetricgrpc.WithDialOption(grpc.WithBlock()),
-	}
+	tracerOpts := []otlptracegrpc.Option{}
+	meterOpts := []otlpmetricgrpc.Option{}
 
 	if tlsConf, err := buildTLSConfig(); tlsConf != nil && err == nil {
 		creds := credentials.NewTLS(tlsConf)
@@ -402,10 +398,16 @@ func StartRootSpan(ctx context.Context, rw http.ResponseWriter, r *http.Request)
 		ctx = propagator.Extract(ctx, propagation.HeaderCarrier(r.Header))
 	}
 
+	server := r.Host
+	if len(server) == 0 {
+		server = "imgproxy"
+	}
+
 	ctx, span := tracer.Start(
 		ctx, "/request",
 		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(httpconv.ServerRequest("imgproxy", r)...),
+		trace.WithAttributes(httpconv.ServerRequest(server, r)...),
+		trace.WithAttributes(semconv.HTTPURL(r.RequestURI)),
 	)
 	ctx = context.WithValue(ctx, hasSpanCtxKey{}, struct{}{})
 
@@ -424,13 +426,58 @@ func StartRootSpan(ctx context.Context, rw http.ResponseWriter, r *http.Request)
 	return ctx, cancel, newRw
 }
 
-func StartSpan(ctx context.Context, name string) context.CancelFunc {
+func setMetadata(span trace.Span, key string, value interface{}) {
+	if len(key) == 0 || value == nil {
+		return
+	}
+
+	rv := reflect.ValueOf(value)
+
+	switch {
+	case rv.Kind() == reflect.String:
+		span.SetAttributes(attribute.String(key, value.(string)))
+	case rv.Kind() == reflect.Bool:
+		span.SetAttributes(attribute.Bool(key, value.(bool)))
+	case rv.CanInt():
+		span.SetAttributes(attribute.Int64(key, rv.Int()))
+	case rv.CanUint():
+		span.SetAttributes(attribute.Int64(key, int64(rv.Uint())))
+	case rv.CanFloat():
+		span.SetAttributes(attribute.Float64(key, rv.Float()))
+	case rv.Kind() == reflect.Map && rv.Type().Key().Kind() == reflect.String:
+		for _, k := range rv.MapKeys() {
+			setMetadata(span, key+"."+k.String(), rv.MapIndex(k).Interface())
+		}
+	default:
+		// Theoretically, we can also cover slices and arrays here,
+		// but it's pretty complex and not really needed for now
+		span.SetAttributes(attribute.String(key, fmt.Sprintf("%v", value)))
+	}
+}
+
+func SetMetadata(ctx context.Context, key string, value interface{}) {
+	if !enabled {
+		return
+	}
+
+	if ctx.Value(hasSpanCtxKey{}) != nil {
+		if span := trace.SpanFromContext(ctx); span != nil {
+			setMetadata(span, key, value)
+		}
+	}
+}
+
+func StartSpan(ctx context.Context, name string, meta map[string]any) context.CancelFunc {
 	if !enabled {
 		return func() {}
 	}
 
 	if ctx.Value(hasSpanCtxKey{}) != nil {
 		_, span := tracer.Start(ctx, name, trace.WithSpanKind(trace.SpanKindInternal))
+
+		for k, v := range meta {
+			setMetadata(span, k, v)
+		}
 
 		return func() { span.End() }
 	}
@@ -455,7 +502,7 @@ func SendError(ctx context.Context, errType string, err error) {
 			attributes = append(attributes, semconv.ExceptionStacktraceKey.String(stack))
 		}
 	}
-
+	span.SetStatus(codes.Error, err.Error())
 	span.AddEvent(semconv.ExceptionEventName, trace.WithAttributes(attributes...))
 }
 
@@ -528,6 +575,15 @@ func addDefaultMetrics() error {
 		return fmt.Errorf("Can't add go_threads gauge to OpenTelemetry: %s", err)
 	}
 
+	workersGauge, err := meter.Int64ObservableGauge(
+		"workers",
+		metric.WithUnit("1"),
+		metric.WithDescription("A gauge of the number of running workers."),
+	)
+	if err != nil {
+		return fmt.Errorf("Can't add workets gauge to OpenTelemetry: %s", err)
+	}
+
 	requestsInProgressGauge, err := meter.Float64ObservableGauge(
 		"requests_in_progress",
 		metric.WithUnit("1"),
@@ -544,6 +600,15 @@ func addDefaultMetrics() error {
 	)
 	if err != nil {
 		return fmt.Errorf("Can't add images_in_progress gauge to OpenTelemetry: %s", err)
+	}
+
+	workersUtilizationGauge, err := meter.Float64ObservableGauge(
+		"workers_utilization",
+		metric.WithUnit("%"),
+		metric.WithDescription("A gauge of the workers utilization in percents."),
+	)
+	if err != nil {
+		return fmt.Errorf("Can't add workers_utilization gauge to OpenTelemetry: %s", err)
 	}
 
 	bufferDefaultSizeGauge, err := meter.Int64ObservableGauge(
@@ -585,8 +650,10 @@ func addDefaultMetrics() error {
 			o.ObserveInt64(goGoroutines, int64(runtime.NumGoroutine()))
 			o.ObserveInt64(goThreads, int64(threadsNum))
 
+			o.ObserveInt64(workersGauge, int64(config.Workers))
 			o.ObserveFloat64(requestsInProgressGauge, stats.RequestsInProgress())
 			o.ObserveFloat64(imagesInProgressGauge, stats.ImagesInProgress())
+			o.ObserveFloat64(workersUtilizationGauge, stats.WorkersUtilization())
 
 			bufferStatsMutex.Lock()
 			defer bufferStatsMutex.Unlock()
@@ -606,8 +673,10 @@ func addDefaultMetrics() error {
 		goMemstatsHeapInuse,
 		goGoroutines,
 		goThreads,
+		workersGauge,
 		requestsInProgressGauge,
 		imagesInProgressGauge,
+		workersUtilizationGauge,
 		bufferDefaultSizeGauge,
 		bufferMaxSizeGauge,
 	)

@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"reflect"
 	"sync"
 	"time"
 
@@ -123,13 +124,43 @@ func StartRootSpan(ctx context.Context, rw http.ResponseWriter, r *http.Request)
 	return context.WithValue(ctx, spanCtxKey{}, span), cancel, newRw
 }
 
-func StartSpan(ctx context.Context, name string) context.CancelFunc {
+func setMetadata(span tracer.Span, key string, value any) {
+	if len(key) == 0 || value == nil {
+		return
+	}
+
+	if rv := reflect.ValueOf(value); rv.Kind() == reflect.Map && rv.Type().Key().Kind() == reflect.String {
+		for _, k := range rv.MapKeys() {
+			setMetadata(span, key+"."+k.String(), rv.MapIndex(k).Interface())
+		}
+		return
+	}
+
+	span.SetTag(key, value)
+}
+
+func SetMetadata(ctx context.Context, key string, value any) {
+	if !enabled {
+		return
+	}
+
+	if rootSpan, ok := ctx.Value(spanCtxKey{}).(tracer.Span); ok {
+		setMetadata(rootSpan, key, value)
+	}
+}
+
+func StartSpan(ctx context.Context, name string, meta map[string]any) context.CancelFunc {
 	if !enabled {
 		return func() {}
 	}
 
 	if rootSpan, ok := ctx.Value(spanCtxKey{}).(tracer.Span); ok {
 		span := tracer.StartSpan(name, tracer.Measured(), tracer.ChildOf(rootSpan.Context()))
+
+		for k, v := range meta {
+			setMetadata(span, k, v)
+		}
+
 		return func() { span.Finish() }
 	}
 
@@ -187,8 +218,10 @@ func runMetricsCollector() {
 				}
 			}()
 
+			statsdClient.Gauge("imgproxy.workers", float64(config.Workers), nil, 1)
 			statsdClient.Gauge("imgproxy.requests_in_progress", stats.RequestsInProgress(), nil, 1)
 			statsdClient.Gauge("imgproxy.images_in_progress", stats.ImagesInProgress(), nil, 1)
+			statsdClient.Gauge("imgproxy.workers_utilization", stats.WorkersUtilization(), nil, 1)
 		case <-statsdClientStop:
 			return
 		}

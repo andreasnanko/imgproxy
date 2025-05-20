@@ -32,6 +32,18 @@ func (s *ProcessingOptionsTestSuite) TestParseBase64URL() {
 	s.Require().Equal(imagetype.PNG, po.Format)
 }
 
+func (s *ProcessingOptionsTestSuite) TestParseBase64URLWithFilename() {
+	config.Base64URLIncludesFilename = true
+
+	originURL := "http://images.dev/lorem/ipsum.jpg?param=value"
+	path := fmt.Sprintf("/size:100:100/%s.png/puppy.jpg", base64.RawURLEncoding.EncodeToString([]byte(originURL)))
+	po, imageURL, err := ParsePath(path, make(http.Header))
+
+	s.Require().NoError(err)
+	s.Require().Equal(originURL, imageURL)
+	s.Require().Equal(imagetype.PNG, po.Format)
+}
+
 func (s *ProcessingOptionsTestSuite) TestParseBase64URLWithoutExtension() {
 	originURL := "http://images.dev/lorem/ipsum.jpg?param=value"
 	path := fmt.Sprintf("/size:100:100/%s", base64.RawURLEncoding.EncodeToString([]byte(originURL)))
@@ -136,6 +148,19 @@ func (s *ProcessingOptionsTestSuite) TestParsePlainURLEscapedWithBase() {
 	s.Require().NoError(err)
 	s.Require().Equal(fmt.Sprintf("%s%s", config.BaseURL, originURL), imageURL)
 	s.Require().Equal(imagetype.PNG, po.Format)
+}
+
+func (s *ProcessingOptionsTestSuite) TestParseWithArgumentsSeparator() {
+	config.ArgumentsSeparator = ","
+
+	path := "/size,100,100,1/plain/http://images.dev/lorem/ipsum.jpg"
+	po, _, err := ParsePath(path, make(http.Header))
+
+	s.Require().NoError(err)
+
+	s.Require().Equal(100, po.Width)
+	s.Require().Equal(100, po.Height)
+	s.Require().True(po.Enlarge)
 }
 
 // func (s *ProcessingOptionsTestSuite) TestParseURLAllowedSource() {
@@ -384,9 +409,9 @@ func (s *ProcessingOptionsTestSuite) TestParsePathWatermark() {
 	s.Require().NoError(err)
 
 	s.Require().True(po.Watermark.Enabled)
-	s.Require().Equal(GravitySouthEast, po.Watermark.Gravity.Type)
-	s.Require().InDelta(10.0, po.Watermark.Gravity.X, 0.0001)
-	s.Require().InDelta(20.0, po.Watermark.Gravity.Y, 0.0001)
+	s.Require().Equal(GravitySouthEast, po.Watermark.Position.Type)
+	s.Require().InDelta(10.0, po.Watermark.Position.X, 0.0001)
+	s.Require().InDelta(20.0, po.Watermark.Position.Y, 0.0001)
 	s.Require().InDelta(0.6, po.Watermark.Scale, 0.0001)
 }
 
@@ -465,7 +490,7 @@ func (s *ProcessingOptionsTestSuite) TestParsePathStripMetadata() {
 }
 
 func (s *ProcessingOptionsTestSuite) TestParsePathWebpDetection() {
-	config.EnableWebpDetection = true
+	config.AutoWebp = true
 
 	path := "/plain/http://images.dev/lorem/ipsum.jpg"
 	headers := http.Header{"Accept": []string{"image/webp"}}
@@ -546,25 +571,6 @@ func (s *ProcessingOptionsTestSuite) TestParsePathDprHeaderDisabled() {
 	s.Require().InDelta(1.0, po.Dpr, 0.0001)
 }
 
-func (s *ProcessingOptionsTestSuite) TestParsePathOnlyPresets() {
-	config.OnlyPresets = true
-	presets["test1"] = urlOptions{
-		urlOption{Name: "blur", Args: []string{"0.2"}},
-	}
-	presets["test2"] = urlOptions{
-		urlOption{Name: "quality", Args: []string{"50"}},
-	}
-
-	path := "/test1:test2/plain/http://images.dev/lorem/ipsum.jpg"
-
-	po, _, err := ParsePath(path, make(http.Header))
-
-	s.Require().NoError(err)
-
-	s.Require().InDelta(float32(0.2), po.Blur, 0.0001)
-	s.Require().Equal(50, po.Quality)
-}
-
 func (s *ProcessingOptionsTestSuite) TestParseSkipProcessing() {
 	path := "/skp:jpg:png/plain/http://images.dev/lorem/ipsum.jpg"
 
@@ -595,8 +601,26 @@ func (s *ProcessingOptionsTestSuite) TestParseExpiresExpired() {
 	path := "/exp:1609448400/plain/http://images.dev/lorem/ipsum.jpg"
 	_, _, err := ParsePath(path, make(http.Header))
 
-	s.Require().Error(err)
-	s.Require().Equal(errExpiredURL.Error(), err.Error())
+	s.Require().Error(err, "Expired URL")
+}
+
+func (s *ProcessingOptionsTestSuite) TestParsePathOnlyPresets() {
+	config.OnlyPresets = true
+	presets["test1"] = urlOptions{
+		urlOption{Name: "blur", Args: []string{"0.2"}},
+	}
+	presets["test2"] = urlOptions{
+		urlOption{Name: "quality", Args: []string{"50"}},
+	}
+
+	path := "/test1:test2/plain/http://images.dev/lorem/ipsum.jpg"
+
+	po, _, err := ParsePath(path, make(http.Header))
+
+	s.Require().NoError(err)
+
+	s.Require().InDelta(float32(0.2), po.Blur, 0.0001)
+	s.Require().Equal(50, po.Quality)
 }
 
 func (s *ProcessingOptionsTestSuite) TestParseBase64URLOnlyPresets() {

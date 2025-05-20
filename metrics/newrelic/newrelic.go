@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"reflect"
 	"regexp"
 	"sync"
 	"time"
@@ -21,6 +22,10 @@ import (
 type transactionCtxKey struct{}
 
 type GaugeFunc func() float64
+
+type attributable interface {
+	AddAttribute(key string, value interface{})
+}
 
 const (
 	defaultMetricURL = "https://metric-api.newrelic.com/metric/v1"
@@ -131,13 +136,52 @@ func StartTransaction(ctx context.Context, rw http.ResponseWriter, r *http.Reque
 	return context.WithValue(ctx, transactionCtxKey{}, txn), cancel, newRw
 }
 
-func StartSegment(ctx context.Context, name string) context.CancelFunc {
+func setMetadata(span attributable, key string, value interface{}) {
+	if len(key) == 0 || value == nil {
+		return
+	}
+
+	rv := reflect.ValueOf(value)
+	switch {
+	case rv.Kind() == reflect.String || rv.Kind() == reflect.Bool:
+		span.AddAttribute(key, value)
+	case rv.CanInt():
+		span.AddAttribute(key, rv.Int())
+	case rv.CanUint():
+		span.AddAttribute(key, rv.Uint())
+	case rv.CanFloat():
+		span.AddAttribute(key, rv.Float())
+	case rv.Kind() == reflect.Map && rv.Type().Key().Kind() == reflect.String:
+		for _, k := range rv.MapKeys() {
+			setMetadata(span, key+"."+k.String(), rv.MapIndex(k).Interface())
+		}
+	default:
+		span.AddAttribute(key, fmt.Sprintf("%v", value))
+	}
+}
+
+func SetMetadata(ctx context.Context, key string, value interface{}) {
+	if !enabled {
+		return
+	}
+
+	if txn, ok := ctx.Value(transactionCtxKey{}).(*newrelic.Transaction); ok {
+		setMetadata(txn, key, value)
+	}
+}
+
+func StartSegment(ctx context.Context, name string, meta map[string]any) context.CancelFunc {
 	if !enabled {
 		return func() {}
 	}
 
 	if txn, ok := ctx.Value(transactionCtxKey{}).(*newrelic.Transaction); ok {
 		segment := txn.StartSegment(name)
+
+		for k, v := range meta {
+			setMetadata(segment, k, v)
+		}
+
 		return func() { segment.End() }
 	}
 
@@ -248,6 +292,12 @@ func runMetricsCollector() {
 			}()
 
 			harvester.RecordMetric(telemetry.Gauge{
+				Name:      "imgproxy.workers",
+				Value:     float64(config.Workers),
+				Timestamp: time.Now(),
+			})
+
+			harvester.RecordMetric(telemetry.Gauge{
 				Name:      "imgproxy.requests_in_progress",
 				Value:     stats.RequestsInProgress(),
 				Timestamp: time.Now(),
@@ -256,6 +306,12 @@ func runMetricsCollector() {
 			harvester.RecordMetric(telemetry.Gauge{
 				Name:      "imgproxy.images_in_progress",
 				Value:     stats.ImagesInProgress(),
+				Timestamp: time.Now(),
+			})
+
+			harvester.RecordMetric(telemetry.Gauge{
+				Name:      "imgproxy.workers_utilization",
+				Value:     stats.WorkersUtilization(),
 				Timestamp: time.Now(),
 			})
 

@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -10,12 +9,12 @@ import (
 	"github.com/imgproxy/imgproxy/v3/ierrors"
 )
 
-type timerSinceCtxKey = struct{}
+type timerSinceCtxKey struct{}
 
 func startRequestTimer(r *http.Request) (*http.Request, context.CancelFunc) {
 	ctx := r.Context()
 	ctx = context.WithValue(ctx, timerSinceCtxKey{}, time.Now())
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.WriteTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.Timeout)*time.Second)
 	return r.WithContext(ctx), cancel
 }
 
@@ -34,11 +33,11 @@ func CheckTimeout(ctx context.Context) error {
 		err := ctx.Err()
 		switch err {
 		case context.Canceled:
-			return ierrors.New(499, fmt.Sprintf("Request was cancelled after %v", d), "Cancelled")
+			return newRequestCancelledError(d)
 		case context.DeadlineExceeded:
-			return ierrors.New(http.StatusServiceUnavailable, fmt.Sprintf("Request was timed out after %v", d), "Timeout")
+			return newRequestTimeoutError(d)
 		default:
-			return err
+			return ierrors.Wrap(err, 0)
 		}
 	default:
 		return nil

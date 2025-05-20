@@ -19,6 +19,7 @@ import (
 	"github.com/imgproxy/imgproxy/v3/config"
 	"github.com/imgproxy/imgproxy/v3/httprange"
 	defaultTransport "github.com/imgproxy/imgproxy/v3/transport"
+	"github.com/imgproxy/imgproxy/v3/transport/common"
 	"github.com/imgproxy/imgproxy/v3/transport/notmodified"
 )
 
@@ -83,8 +84,7 @@ func New() (http.RoundTripper, error) {
 }
 
 func (t transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	container := req.URL.Host
-	key := strings.TrimPrefix(req.URL.Path, "/")
+	container, key, _ := common.GetBucketAndKey(req.URL)
 
 	if len(container) == 0 || len(key) == 0 {
 		body := strings.NewReader("Invalid ABS URL: container name or object key is empty")
@@ -93,7 +93,7 @@ func (t transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			Proto:         "HTTP/1.0",
 			ProtoMajor:    1,
 			ProtoMinor:    0,
-			Header:        http.Header{},
+			Header:        http.Header{"Content-Type": {"text/plain"}},
 			ContentLength: int64(body.Len()),
 			Body:          io.NopCloser(body),
 			Close:         false,
@@ -109,7 +109,7 @@ func (t transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if r := req.Header.Get("Range"); len(r) != 0 {
 		start, end, err := httprange.Parse(r)
 		if err != nil {
-			return httprange.InvalidHTTPRangeResponse(req), err
+			return httprange.InvalidHTTPRangeResponse(req), nil
 		}
 
 		if end != 0 {
@@ -138,7 +138,7 @@ func (t transport) RoundTrip(req *http.Request) (*http.Response, error) {
 				Proto:         "HTTP/1.0",
 				ProtoMajor:    1,
 				ProtoMinor:    0,
-				Header:        header,
+				Header:        http.Header{"Content-Type": {"text/plain"}},
 				ContentLength: int64(body.Len()),
 				Body:          io.NopCloser(body),
 				Close:         false,
