@@ -1,40 +1,52 @@
 package honeybadger
 
 import (
+	"log/slog"
 	"net/http"
-	"reflect"
+	"net/url"
 	"strings"
 
 	"github.com/honeybadger-io/honeybadger-go"
-
-	"github.com/imgproxy/imgproxy/v3/config"
-	"github.com/imgproxy/imgproxy/v3/ierrors"
+	"github.com/imgproxy/imgproxy/v4/errctx"
 )
 
 var (
-	enabled bool
-
 	metaReplacer = strings.NewReplacer("-", "_", " ", "_")
 )
 
-func Init() {
-	if len(config.HoneybadgerKey) > 0 {
-		honeybadger.Configure(honeybadger.Configuration{
-			APIKey: config.HoneybadgerKey,
-			Env:    config.HoneybadgerEnv,
-		})
-		enabled = true
-	}
+type Reporter struct {
+	client *honeybadger.Client
 }
 
-func Report(err error, req *http.Request, meta map[string]any) {
-	if !enabled {
-		return
+func New(config *Config) (*Reporter, error) {
+	if err := config.Validate(); err != nil {
+		return nil, err
 	}
 
-	extra := make(honeybadger.CGIData, len(req.Header)+len(meta))
+	if len(config.Key) == 0 {
+		return nil, nil
+	}
 
-	for k, v := range req.Header {
+	client := honeybadger.New(honeybadger.Configuration{
+		APIKey:  config.Key,
+		Env:     config.Env,
+		Backend: config.Backend,
+	})
+
+	return &Reporter{client: client}, nil
+}
+
+func (r *Reporter) Report(err errctx.Error, req *http.Request, meta map[string]any) {
+	var header http.Header
+	var reqURL *url.URL
+	if req != nil {
+		header = req.Header
+		reqURL = req.URL
+	}
+
+	extra := make(honeybadger.CGIData, len(header)+len(meta))
+
+	for k, v := range header {
 		key := "HTTP_" + metaReplacer.Replace(strings.ToUpper(k))
 		extra[key] = v[0]
 	}
@@ -44,11 +56,17 @@ func Report(err error, req *http.Request, meta map[string]any) {
 		extra[key] = v
 	}
 
-	hbErr := honeybadger.NewError(err)
+	// imgproxy may wrap errors using errctx.WrappedError to add context, so Honeybadger
+	// would report the error type as *errctx.WrappedError.
+	//
+	// To avoid this, we provide error class information explicitly.
+	errClass := honeybadger.ErrorClass{Name: errctx.ErrorType(err)}
 
-	if e, ok := err.(*ierrors.Error); ok {
-		hbErr.Class = reflect.TypeOf(e.Unwrap()).String()
+	if _, repErr := r.client.Notify(err, errClass, reqURL, extra); repErr != nil {
+		slog.Warn("Failed to report error to Honeybadger", "error", repErr)
 	}
+}
 
-	honeybadger.Notify(hbErr, req.URL, extra)
+func (r *Reporter) Close() {
+	r.client.Flush()
 }

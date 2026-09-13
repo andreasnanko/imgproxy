@@ -5,43 +5,56 @@ import (
 	"strings"
 
 	"github.com/airbrake/gobrake/v5"
-
-	"github.com/imgproxy/imgproxy/v3/config"
+	"github.com/imgproxy/imgproxy/v4/errctx"
 )
 
 var (
-	notifier *gobrake.Notifier
-
 	metaReplacer = strings.NewReplacer(" ", "-")
 )
 
-func Init() {
-	if len(config.AirbrakeProjectKey) > 0 {
-		notifier = gobrake.NewNotifierWithOptions(&gobrake.NotifierOptions{
-			ProjectId:   int64(config.AirbrakeProjectID),
-			ProjectKey:  config.AirbrakeProjectKey,
-			Environment: config.AirbrakeEnv,
-		})
-	}
+type Reporter struct {
+	notifier *gobrake.Notifier
 }
 
-func Report(err error, req *http.Request, meta map[string]any) {
-	if notifier == nil {
-		return
+func New(config *Config) (*Reporter, error) {
+	if err := config.Validate(); err != nil {
+		return nil, err
 	}
 
-	notice := notifier.Notice(err, req, 2)
+	if len(config.ProjectKey) == 0 {
+		return nil, nil
+	}
+
+	notifier := gobrake.NewNotifierWithOptions(&gobrake.NotifierOptions{
+		ProjectId:   int64(config.ProjectID),
+		ProjectKey:  config.ProjectKey,
+		Environment: config.Env,
+	})
+
+	if config.Filter != nil {
+		notifier.AddFilter(config.Filter)
+	}
+
+	return &Reporter{notifier}, nil
+}
+
+func (r *Reporter) Report(err errctx.Error, req *http.Request, meta map[string]any) {
+	notice := r.notifier.Notice(err, req, 2)
+
+	// imgproxy may wrap errors using errctx.WrappedError to add context, so Airbrake
+	// would report the error type as *errctx.WrappedError.
+	//
+	// To avoid this, we set the correct error type here.
+	notice.Errors[0].Type = errctx.ErrorType(err)
 
 	for k, v := range meta {
 		key := metaReplacer.Replace(strings.ToLower(k))
 		notice.Context[key] = v
 	}
 
-	notifier.SendNoticeAsync(notice)
+	r.notifier.SendNoticeAsync(notice)
 }
 
-func Close() {
-	if notifier != nil {
-		notifier.Close()
-	}
+func (r *Reporter) Close() {
+	r.notifier.Close()
 }

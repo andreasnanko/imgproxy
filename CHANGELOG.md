@@ -1,7 +1,301 @@
 # Changelog
 
-## [Unreleased]
+## [4.0.14] - 2026-08-24
+### Changed
+- Updated dependencies.
+
+### Fixed
+- Fixed a panic on certain malformed request paths (such as a trailing double slash) that returned a 500 error instead of a proper 4xx response.
+
+## [4.0.13] - 2026-08-18
+### Changed
+- Updated dependencies.
+
+## Fixed
+- Fixed inconsistent environment variable names between the code and documentation (`IMGPROXY_AIRBRAKE_ENVIRONMENT`, `IMGPROXY_S3_USE_DECRYPTION_CLIENT`, `IMGPROXY_USE_LAST_MODIFIED` and `IMGPROXY_USE_ETAG`).
+- Fixed recovered non-error panics still being logged and reported as `panic: <nil>` instead of the actual panic value.
+- Fix `IMGPROXY_ENABLE_CLIENT_HINTS` never being parsed from env.
+
+## [4.1.0] - TBA
 ### Added
+- `requests_total`, `status_codes_total`, `errors_total`, `request_duration_seconds`, `request_span_duration_seconds` metrics to OpenTelemetry.
+- [IMGPROXY_S3_ACCESS_POINTS](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_S3_ACCESS_POINTS) config to configure S3 access points.
+- [IMGPROXY_TIFF_UNLIMITED](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_TIFF_UNLIMITED) config.
+- (pro) [progressive_blur](https://docs.imgproxy.net/latest/usage/processing#progressive-blur) processing option.
+- (pro) [IMGPROXY_MAX_ML_CONCURRENCY](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_MAX_ML_CONCURRENCY) config to limit the number of concurrent ML tasks.
+- (pro) Added `bypass_cache` option.
+
+### Changed
+- OpenTelemetry logs exporter now exports logs in OpenTelemetry Log Data Model format instead of formatted strings.
+- (pro) Improved advanced smart crop.
+
+## [4.0.12] - 2026-07-29
+### Fixed
+- Fixed possible BMP loader heap buffer overflow.
+- (pro) Fixed SVG minifier failure on empty comments.
+- SVG sanitizator now strips dangerous href values in all the elements.
+- Fixed truncation of source image downloads when origins returned gzip-compressed responses.
+- The `Content-Length` header was previously ignored for S3, Google Cloud Storage, Azure Blob Storage, and Swift responses.
+- SVG sanitizer now strips unsafe `href`/`xlink:href` attribute values (such as `javascript:`) from all elements, not just `<use>`, preventing script execution via crafted SVGs.
+- SSRF boundary bypass in private source address guard. The guard now correctly rejects RFC 6598 CGNAT addresses (100.64.0.0/10) and detects IPv6 addresses that carry embedded IPv4 payloads (IPv4-compatible, 6to4, NAT64 well-known, NAT64 local-use, Teredo, ISATAP), per RFC 3056, RFC 4291, RFC 4380, RFC 5214, RFC 6052, RFC 8215.
+
+## [4.0.11] - 2026-07-02
+### Fixed
+- (pro) Non-essential cache errors are no longer reported.
+
+## [4.0.10] - 2026-07-02
+### Fixed
+- (pro) Non-essential cache errors are no longer reported.
+
+## [4.0.9] - 2026-07-02
+### Added
+- `requests_total`, `status_codes_total`, `errors_total`, `request_duration_seconds`, `request_span_duration_seconds` metrics to OpenTelemetry.
+- (pro) `cache_hits_total`, `cache_misses_total` metrics.
+
+### Changed
+- devcontainers are now using volumes for caching.
+
+## [4.0.8] - 2026-06-29
+### Fixed
+- (docker) Fix loading HEIC/AVIF images with large number of items (for real this time).
+
+## [4.0.7] - 2026-06-26
+### Fixed
+- (docker) Fix loading HEIC/AVIF images with large number of items.
+
+## [4.0.6] - 2026-06-24
+### Changed
+- Remove `form` tags from SVGs during sanitization.
+- Use more strict `Content-Security-Policy` header: `default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox`.
+
+### Fixed
+- Don't write the `Cache-Control` header for error responses.
+- Allow zero `IMGPROXY_MAX_REDIRECTS` config value.
+
+## [4.0.5] - 2026-06-12
+### Fixed
+- Fix handling of wide-gamut ICC profiles.
+
+## [4.0.4] - 2026-06-09
+### Fixed
+- Fix AWS credentials lifetime when `IMGPROXY_S3_ASSUME_ROLE_ARN` config is used.
+- (pro) Fix a rare deadlock during ML model inference.
+
+## [3.31.4] - 2026-06-09
+### Fixed
+- Fix AWS credentials lifetime when IMGPROXY_S3_ASSUME_ROLE_ARN config is used.
+- (pro) Fix a rare deadlock during ML model inference.
+
+## [4.0.3] - 2026-04-21
+### Fixed
+- (pro) Fixed a bug in the cache key generation
+
+## [4.0.2] - 2026-04-21
+### Changed
+- (pro) [`expires`](https://docs.imgproxy.net/usage/processing#expires) processing option is removed from the cache key.
+
+### Fixed
+- Fixed a rare deadlock during image downloading.
+- Fix normalized URL path parsing when it doesn't contain any options.
+
+## [4.0.1] - 2026-05-18
+
+This is a maintenance release with updated dependencies
+
+## [4.0.0] - 2026-05-13
+### Added
+- (pro) Add [internal cache](https://docs.imgproxy.net/cache/internal) for processed images.
+- (pro) Add [digital camera raw](https://docs.imgproxy.net/image_formats_support#raw-support) formats support (loading only).
+- (pro) Add [crop_objects](https://docs.imgproxy.net/usage/processing#crop-objects) processing option to crop the image to detected objects.
+- (pro) Add [thumb_hash](https://docs.imgproxy.net/usage/getting_info#thumb-hash) info option to calculate [ThumbHash](https://evanw.github.io/thumbhash/) of the source image.
+- (pro) Add [phash](https://docs.imgproxy.net/usage/getting_info#perceptual-hash) info option to calculate perceptual hash of the source image.
+- (pro) Add [classify](https://docs.imgproxy.net/usage/getting_info#classify) info option to classify objects in the source image using a classification model.
+- Add [IMGPROXY_PRESERVE_HDR](https://docs.imgproxy.net/configuration/options#IMGPROXY_PRESERVE_HDR) config. When set to `true`, imgproxy will try to keep the image's bits per pixel when possible.
+- Add [preserve_hdr](https://docs.imgproxy.net/usage/processing#preserve-hdr) processing option to override the `IMGPROXY_PRESERVE_HDR` config on a per-request basis.
+- Add [IMGPROXY_OPEN_TELEMETRY_ENABLE_LOGS](https://docs.imgproxy.net/configuration/options#IMGPROXY_OPEN_TELEMETRY_ENABLE_LOGS) config to control whether to send logs to OpenTelemetry.
+- Add [IMGPROXY_NEW_RELIC_PROPAGATE_EXTERNAL](https://docs.imgproxy.net/configuration/options#IMGPROXY_NEW_RELIC_PROPAGATE_EXTERNAL), [IMGPROXY_DATADOG_PROPAGATE_EXTERNAL](https://docs.imgproxy.net/configuration/options#IMGPROXY_DATADOG_PROPAGATE_EXTERNAL), and [IMGPROXY_OPEN_TELEMETRY_PROPAGATE_EXTERNAL](https://docs.imgproxy.net/configuration/options#IMGPROXY_OPEN_TELEMETRY_PROPAGATE_EXTERNAL) configs to control propagation of tracing headers to external requests.
+- Add [IMGPROXY_S3_ALLOWED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_S3_ALLOWED_BUCKETS), [IMGPROXY_GCS_ALLOWED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_GCS_ALLOWED_BUCKETS), [IMGPROXY_ABS_ALLOWED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_ABS_ALLOWED_BUCKETS), and [IMGPROXY_SWIFT_ALLOWED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_SWIFT_ALLOWED_BUCKETS) configs to allowlist buckets/containers that imgproxy can read source images from.
+- Add [IMGPROXY_S3_DENIED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_S3_DENIED_BUCKETS), [IMGPROXY_GCS_DENIED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_GCS_DENIED_BUCKETS), [IMGPROXY_ABS_DENIED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_ABS_DENIED_BUCKETS), and [IMGPROXY_SWIFT_DENIED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_SWIFT_DENIED_BUCKETS) configs to denylist buckets/containers that imgproxy can read source images from.
+- Add pretty error pages when [IMGPROXY_DEVELOPMENT_ERRORS_MODE](https://docs.imgproxy.net/configuration/options#IMGPROXY_DEVELOPMENT_ERRORS_MODE) is enabled.
+- Add documentation links to errors. They will be visible in logs and error reports.
+- Add [IMGPROXY_LAST_MODIFIED_BUSTER](https://docs.imgproxy.net/configuration/options#IMGPROXY_LAST_MODIFIED_BUSTER) config to control whether to pass through the `If-Modified-Since` header to the image source.
+
+### Changed
+- Most of the code base is refactored to improve maintainability and extensibility.
+- Implemented asynchronous downloading and processing of images. This improves performance when the source image is slow to download or when processing is slow.
+- Source image colorspace is now preserved when possible.
+- (pro) Improved SVG minification. It is now much faster and more efficient.
+- (pro) Improved [autoquality](https://docs.imgproxy.net/features/autoquality). Implemented weighted DSSIM calculation and trained new ML models for JPEG, WebP, AVIF, and JPEG XL.
+- [IMGPROXY_USE_ETAG](https://docs.imgproxy.net/configuration/options#IMGPROXY_USE_ETAG) and [IMGPROXY_USE_LAST_MODIFIED](https://docs.imgproxy.net/configuration/options#IMGPROXY_USE_LAST_MODIFIED) are now enabled by default.
+- Etag generation is now based only on Etag received from the image source and [IMGPROXY_ETAG_BUSTER](https://docs.imgproxy.net/configuration/options#IMGPROXY_ETAG_BUSTER) config.
+- [IMGPROXY_USE_GCS](https://docs.imgproxy.net/configuration/options#IMGPROXY_USE_GCS) is not automatically set if the GCS key is present anymore. It should be set explicitly to enable loading images from Google Cloud Storage.
+- SVG rendering DPI is changed from 72 to 96 to match W3C recommendations.
+- (pro) Improved behavior of `IMGPROXY_OBJECT_DETECTION_GRAVITY_MODE=one_best_centermost`.
+- Custom New Relic metrics are now reported as [timescales](https://docs.newrelic.com/docs/apm/agents/manage-apm-agents/agent-data/collect-custom-metrics/). Metric names have been changed from `imgproxy.X` to `Custom/imgproxy/X`.
+- Changed log formats. Option and argument names now match those in the documentation.
+- (docker) imgproxy and its dependencies are now built on Ubuntu 22.04. Linux packages exported from Docker images now require a minimum libc version of 2.35.
+
+### Removed
+- Removed deprecated `IMGPROXY_CONCURRENCY` config. Use `IMGPROXY_WORKERS` instead.
+- Removed deprecated `--keypath` and `--saltpath` CLI arguments. Use `IMGPROXY_KEY` and `IMGPROXY_SALT` environment variables instead.
+- Removed deprecated `--presets` CLI argument. Use `IMGPROXY_PRESETS_PATH` environment variable instead.
+- (pro) Removed deprecated `--info-presets` CLI argument. Use `IMGPROXY_INFO_PRESETS_PATH` environment variable instead.
+- Removed `gif_options` processing option, as it does nothing since v3.
+- Removed deprecated `IMGPROXY_WRITE_TIMEOUT` config. Use `IMGPROXY_TIMEOUT` instead.
+- Removed deprecated `IMGPROXY_READ_TIMEOUT` config. Use `IMGPROXY_READ_REQUEST_TIMEOUT` instead.
+- Removed obsolete `IMGPROXY_MAX_SVG_CHECK_BYTES` config.
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_ENDPOINT` config. Use `OTEL_EXPORTER_OTLP_ENDPOINT` instead. Unlike `IMGPROXY_OPEN_TELEMETRY_ENDPOINT`, `OTEL_EXPORTER_OTLP_ENDPOINT` should contain a URL scheme (`http://` or `https://`).
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_PROTOCOL` config. Use `OTEL_EXPORTER_OTLP_PROTOCOL` instead.
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_GRPC_INSECURE` config. Use `OTEL_EXPORTER_OTLP_ENDPOINT` with `http://` scheme instead.
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_SERVICE_NAME` config. Use `OTEL_SERVICE_NAME` instead.
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_PROPAGATORS` config. Use `OTEL_PROPAGATORS` instead.
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_CONNECTION_TIMEOUT` config. Use `OTEL_EXPORTER_OTLP_TIMEOUT` instead.
+- Removed deprecated `IMGPROXY_UNSHARPENING_MODE`, `IMGPROXY_UNSHARPENING_WEIGHT`, `IMGPROXY_UNSHARPENING_DIVIDER` configs. Use `IMGPROXY_UNSHARP_MASKING_MODE`, `IMGPROXY_UNSHARP_MASKING_WEIGHT`, `IMGPROXY_UNSHARP_MASKING_DIVIDER` instead.
+- Removed deprecated `download_duration_seconds` and `processing_duration_seconds` histograms from Prometheus metrics. Use `request_span_duration_seconds` histogram with `span` label instead.
+- Removed obsolete `IMGPROXY_DOWNLOAD_BUFFER_SIZE` and `IMGPROXY_BUFFER_POOL_CALIBRATION_THRESHOLD` configs.
+
+## [4.0.0-beta.1] - 2026-04-28
+### Added
+- Add [preserve_hdr](https://docs.imgproxy.net/usage/processing#preserve-hdr) processing option to override the `IMGPROXY_PRESERVE_HDR` config on a per-request basis.
+- (pro) Add [IMGPROXY_ENABLE_RAW_FORMATS](https://docs.imgproxy.net/configuration/options#IMGPROXY_ENABLE_RAW_FORMATS) config to enable support for digital camera raw formats.
+
+### Changed
+- (pro) Digital camera raw formats support is disabled by default. Enable it with the [IMGPROXY_ENABLE_RAW_FORMATS](https://docs.imgproxy.net/configuration/options#IMGPROXY_ENABLE_RAW_FORMATS) config.
+
+## [4.0.0-beta.0] - 2026-04-10
+### Added
+- (pro) Add [internal cache](https://docs.imgproxy.net/cache/internal) for processed images.
+- (pro) Add [digital camera raw](https://docs.imgproxy.net/image_formats_support#raw-support) formats support (loading only).
+- (pro) Add [crop_objects](https://docs.imgproxy.net/usage/processing#crop-objects) processing option to crop the image to detected objects.
+- (pro) Add [thumb_hash](https://docs.imgproxy.net/usage/getting_info#thumb-hash) info option to calculate [ThumbHash](https://evanw.github.io/thumbhash/) of the source image.
+- (pro) Add [phash](https://docs.imgproxy.net/usage/getting_info#perceptual-hash) info option to calculate perceptual hash of the source image.
+- (pro) Add [classify](https://docs.imgproxy.net/usage/getting_info#classify) info option to classify objects in the source image using a classification model.
+- Add [IMGPROXY_PRESERVE_HDR](https://docs.imgproxy.net/configuration/options#IMGPROXY_PRESERVE_HDR) config. When set to `true`, imgproxy will try to keep the image's bits per pixel when possible.
+- Add [IMGPROXY_OPEN_TELEMETRY_ENABLE_LOGS](https://docs.imgproxy.net/configuration/options#IMGPROXY_OPEN_TELEMETRY_ENABLE_LOGS) config to control whether to send logs to OpenTelemetry.
+- Add [IMGPROXY_NEW_RELIC_PROPAGATE_EXTERNAL](https://docs.imgproxy.net/configuration/options#IMGPROXY_NEW_RELIC_PROPAGATE_EXTERNAL), [IMGPROXY_DATADOG_PROPAGATE_EXTERNAL](https://docs.imgproxy.net/configuration/options#IMGPROXY_DATADOG_PROPAGATE_EXTERNAL), and [IMGPROXY_OPEN_TELEMETRY_PROPAGATE_EXTERNAL](https://docs.imgproxy.net/configuration/options#IMGPROXY_OPEN_TELEMETRY_PROPAGATE_EXTERNAL) configs to control propagation of tracing headers to external requests.
+- Add [IMGPROXY_S3_ALLOWED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_S3_ALLOWED_BUCKETS), [IMGPROXY_GCS_ALLOWED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_GCS_ALLOWED_BUCKETS), [IMGPROXY_ABS_ALLOWED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_ABS_ALLOWED_BUCKETS), and [IMGPROXY_SWIFT_ALLOWED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_SWIFT_ALLOWED_BUCKETS) configs to allowlist buckets/containers that imgproxy can read source images from.
+- Add [IMGPROXY_S3_DENIED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_S3_DENIED_BUCKETS), [IMGPROXY_GCS_DENIED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_GCS_DENIED_BUCKETS), [IMGPROXY_ABS_DENIED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_ABS_DENIED_BUCKETS), and [IMGPROXY_SWIFT_DENIED_BUCKETS](https://docs.imgproxy.net/configuration/options#IMGPROXY_SWIFT_DENIED_BUCKETS) configs to denylist buckets/containers that imgproxy can read source images from.
+- Add pretty error pages when [IMGPROXY_DEVELOPMENT_ERRORS_MODE](https://docs.imgproxy.net/configuration/options#IMGPROXY_DEVELOPMENT_ERRORS_MODE) is enabled.
+- Add documentation links to errors. They will be visible in logs and error reports.
+- Add [IMGPROXY_LAST_MODIFIED_BUSTER](https://docs.imgproxy.net/configuration/options#IMGPROXY_LAST_MODIFIED_BUSTER) config to control whether to pass through the `If-Modified-Since` header to the image source.
+
+### Changed
+- Most of the code base is refactored to improve maintainability and extensibility.
+- Implemented asynchronous downloading and processing of images. This improves performance when the source image is slow to download or when processing is slow.
+- Source image colorspace is now preserved when possible.
+- (pro) Improved SVG minification. It is now much faster and more efficient.
+- (pro) Improved [autoquality](https://docs.imgproxy.net/features/autoquality). Implemented weighted DSSIM calculation and trained new ML models for JPEG, WebP, AVIF, and JPEG XL.
+- [IMGPROXY_USE_ETAG](https://docs.imgproxy.net/configuration/options#IMGPROXY_USE_ETAG) and [IMGPROXY_USE_LAST_MODIFIED](https://docs.imgproxy.net/configuration/options#IMGPROXY_USE_LAST_MODIFIED) are now enabled by default.
+- Etag generation is now based only on Etag received from the image source and [IMGPROXY_ETAG_BUSTER](https://docs.imgproxy.net/configuration/options#IMGPROXY_ETAG_BUSTER) config.
+- [IMGPROXY_USE_GCS](https://docs.imgproxy.net/configuration/options#IMGPROXY_USE_GCS) is not automatically set if the GCS key is present anymore. It should be set explicitly to enable loading images from Google Cloud Storage.
+- SVG rendering DPI is changed from 72 to 96 to match W3C recommendations.
+- (pro) Improved behavior of `IMGPROXY_OBJECT_DETECTION_GRAVITY_MODE=one_best_centermost`.
+- Custom New Relic metrics are now reported as [timescales](https://docs.newrelic.com/docs/apm/agents/manage-apm-agents/agent-data/collect-custom-metrics/). Metric names have been changed from `imgproxy.X` to `Custom/imgproxy/X`.
+- Changed log formats. Option and argument names now match those in the documentation.
+- (docker) imgproxy and its dependencies are now built on Ubuntu 22.04. Linux packages exported from Docker images now require a minimum libc version of 2.35.
+
+### Removed
+- Removed deprecated `IMGPROXY_CONCURRENCY` config. Use `IMGPROXY_WORKERS` instead.
+- Removed deprecated `--keypath` and `--saltpath` CLI arguments. Use `IMGPROXY_KEY` and `IMGPROXY_SALT` environment variables instead.
+- Removed deprecated `--presets` CLI argument. Use `IMGPROXY_PRESETS_PATH` environment variable instead.
+- (pro) Removed deprecated `--info-presets` CLI argument. Use `IMGPROXY_INFO_PRESETS_PATH` environment variable instead.
+- Removed `gif_options` processing option, as it does nothing since v3.
+- Removed deprecated `IMGPROXY_WRITE_TIMEOUT` config. Use `IMGPROXY_TIMEOUT` instead.
+- Removed deprecated `IMGPROXY_READ_TIMEOUT` config. Use `IMGPROXY_READ_REQUEST_TIMEOUT` instead.
+- Removed obsolete `IMGPROXY_MAX_SVG_CHECK_BYTES` config.
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_ENDPOINT` config. Use `OTEL_EXPORTER_OTLP_ENDPOINT` instead. Unlike `IMGPROXY_OPEN_TELEMETRY_ENDPOINT`, `OTEL_EXPORTER_OTLP_ENDPOINT` should contain a URL scheme (`http://` or `https://`).
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_PROTOCOL` config. Use `OTEL_EXPORTER_OTLP_PROTOCOL` instead.
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_GRPC_INSECURE` config. Use `OTEL_EXPORTER_OTLP_ENDPOINT` with `http://` scheme instead.
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_SERVICE_NAME` config. Use `OTEL_SERVICE_NAME` instead.
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_PROPAGATORS` config. Use `OTEL_PROPAGATORS` instead.
+- Removed deprecated `IMGPROXY_OPEN_TELEMETRY_CONNECTION_TIMEOUT` config. Use `OTEL_EXPORTER_OTLP_TIMEOUT` instead.
+- Removed deprecated `IMGPROXY_UNSHARPENING_MODE`, `IMGPROXY_UNSHARPENING_WEIGHT`, `IMGPROXY_UNSHARPENING_DIVIDER` configs. Use `IMGPROXY_UNSHARP_MASKING_MODE`, `IMGPROXY_UNSHARP_MASKING_WEIGHT`, `IMGPROXY_UNSHARP_MASKING_DIVIDER` instead.
+- Removed deprecated `download_duration_seconds` and `processing_duration_seconds` histograms from Prometheus metrics. Use `request_span_duration_seconds` histogram with `span` label instead.
+- Removed obsolete `IMGPROXY_DOWNLOAD_BUFFER_SIZE` and `IMGPROXY_BUFFER_POOL_CALIBRATION_THRESHOLD` configs.
+
+## [3.31.3] - 2026-04-28
+
+This is a maintenance release with updated dependencies
+
+## [3.31.2] - 2026-04-09
+
+This is a maintenance release with updated dependencies
+
+## [3.31.1] - 2026-03-17
+### Fixed
+- Fix memory leak when saving HEIC/AVIF images with alpha channel.
+
+## [3.31.0] - 2026-03-13
+### Added
+- Add [IMGPROXY_FAIL_ON_DEPRECATION](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_FAIL_ON_DEPRECATION) config. When set to `true`, imgproxy will exit with a fatal error if a deprecated config option is used.
+- Add [flip](https://docs.imgproxy.net/latest/usage/processing#flip) processing option.
+- Add [IMGPROXY_PRESETS_PATH](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_PRESETS_PATH) config.
+- (pro) Add [IMGPROXY_INFO_PRESETS_PATH](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_INFO_PRESETS_PATH) config.
+- (pro) Add [IMGPROXY_AVIF_SUBSAMPLE](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_AVIF_SUBSAMPLE) config.
+- (pro) Add [avif_options](https://docs.imgproxy.net/latest/usage/processing#avif-options) processing option.
+- (pro) Add [blur_areas](https://docs.imgproxy.net/latest/usage/processing#blur-areas) processing option.
+- (pro) Add `canonical_names` argument to the [exif](https://docs.imgproxy.net/latest/usage/getting_info#exif) info option.
+- (pro) Return `orientation` field in the `/info` endpoint response when the [dimensions](https://docs.imgproxy.net/latest/usage/getting_info#dimensions) info option is enabled.
+
+### Changed
+- For security reasons, imgproxy now accepts only service account keys for Google Cloud Storage integration and Google Cloud Secret Manager integration.
+- When image source responds with a 4xx status code, imgproxy now responds with the same status code instead of always responding with `404 Not Found`.
+- When image source responds with a 5xx status code, imgproxy now responds with `502 Bad Gateway` instead of `500 Internal Server Error`.
+- Remove `iframe` elements from SVGs during sanitization.
+
+### Fixed
+- Fix crop coordinates calculation when the image has an EXIF orientation different from `1` and the `rotate` processing option is used.
+- Fix responding with 404 when a GCS bucket or object is missing.
+- Fix handling `:` encoded as `%3A` in processing/info options.
+- (pro) Fix memory leak in ML features.
+- (pro) Fix generating video thumbnails when the server doesn't include the `Accept-Ranges` header in the response but includes the `Content-Range: bytes ...` header.
+- (pro) Fix [watermark_size](https://docs.imgproxy.net/latest/usage/processing#watermark-size) processing option behavior when one of the dimensions is zero.
+
+### Deprecated
+
+- Deprecate `-keypath` and `-saltpath` CLI arguments. Use `IMGPROXY_KEY` and `IMGPROXY_SALT` environment variables instead.
+- Deprecate `-presets` CLI argument. Use `IMGPROXY_PRESETS_PATH` environment variable instead.
+- (pro) Deprecate `-info-presets` CLI argument. Use `IMGPROXY_INFO_PRESETS_PATH` environment variable instead.
+- (pro) Deprecate support for object detection models in DarkNet format. Use ONNX format instead.
+
+## [3.30.1] - 2025-10-10
+### Changed
+- Format New Relic and OpenTelemetry metadata values that implement the `fmt.Stringer` interface as strings.
+
+### Fixed
+- (pro) Fix memory leak during video thumbnail generation.
+
+## [3.30.0] - 2025-09-17
+### Added
+- Add [IMGPROXY_GRACEFUL_STOP_TIMEOUT](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_GRACEFUL_STOP_TIMEOUT) config.
+- (pro) Add [color_profile](https://docs.imgproxy.net/latest/usage/processing#color-profile) processing option and [IMGPROXY_COLOR_PROFILES_DIR](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_COLOR_PROFILES_DIR) config.
+
+### Changed
+- Update the default graceful stop timeout to twice the [IMGPROXY_TIMEOUT](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_TIMEOUT) config value.
+- (pro) Improve video decoding performance.
+- (pro) Respond with `422 Unprocessable Entity` on error during video decoding.
+
+### Fixed
+- Fix the `Vary` header value when `IMGPROXY_AUTO_JXL` or `IMGPROXY_ENFORCE_JXL` configs are set to `true`.
+- Fix connection break when the `raw` processing option is used and the response status code does not allow a response body (such as `304 Not Modified`).
+- Fix the `If-Modified-Since` request header handling when the `raw` processing option is used.
+- Fix `X-Origin-Height` and `X-Result-Height` debug header values for animated images.
+- Fix keeping copyright info in EXIF.
+- Fix preserving color profiles in TIFF images.
+- Fix freezes during sanitization or minification of some broken SVGs.
+- (pro) Fix generating thumbnails for VP9 videos with high bit depth.
+- (pro) Fix `IMGPROXY_CUSTOM_RESPONSE_HEADERS` and `IMGPROXY_RESPONSE_HEADERS_PASSTHROUGH` configs behavior when the `raw` processing option is used.
+
+## [3.29.1] - 2025-07-11
+### Fixed
+- Fix parsing and minifying some SVGs.
+
+## [3.29.0] - 2025-07-08
+### Added
+- Add [IMGPROXY_MAX_RESULT_DIMENSION](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_MAX_RESULT_DIMENSION) config and [max_result_dimension](https://docs.imgproxy.net/latest/usage/processing#max-result-dimension) processing option.
+- Add [IMGPROXY_ALLOWED_PROCESSING_OPTIONS](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_ALLOWED_PROCESSING_OPTIONS) config.
+- (pro) Add [IMGPROXY_ALLOWED_INFO_OPTIONS](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_ALLOWED_INFO_OPTIONS) config.
+- (pro) Add [IMGPROXY_MAX_CHAINED_PIPELINES](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_MAX_CHAINED_PIPELINES) config.
 - Add `imgproxy.source_image_origin` attribute to New Relic, DataDog, and OpenTelemetry traces.
 - Add `imgproxy.source_image_url` and `imgproxy.source_image_origin` attributes to `downloading_image` spans in New Relic, DataDog, and OpenTelemetry traces.
 - Add `imgproxy.processing_options` attribute to `processing_image` spans in New Relic, DataDog, and OpenTelemetry traces.
@@ -9,12 +303,26 @@
 - Add `workers` and `workers_utilization` metrics to all metrics services.
 - (pro) Add [crop_aspect_ratio](https://docs.imgproxy.net/latest/usage/processing#crop-aspect-ratio) processing option.
 - (pro) Add [IMGPROXY_PDF_NO_BACKGROUND](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_PDF_NO_BACKGROUND) config.
+- Add [IMGPROXY_WEBP_EFFORT](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_WEBP_EFFORT) config.
+- Add [IMGPROXY_WEBP_PRESET](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_WEBP_PRESET) config.
+- (pro) Add support for saving images as PDF.
 
 ### Changed
+- Suppress "Response has no supported checksum" warnings from S3 SDK.
+- The [IMGPROXY_USER_AGENT](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_USER_AGENT) config now supports the `%current_version` variable that is replaced with the current imgproxy version.
 - (docker) Optimized image quantization.
+- (pro) Improved BlurHash generation performance.
 
 ### Fixed
 - Fix `X-Origin-Content-Length` header value when SVG is sanitized or minified.
+- Mark JPEG XL format as supporting quality. Fixes autoquality for JPEG XL.
+- Fix the `extend` processing option when only one dimension is set.
+- (pro) Fix object detection when the `IMGPROXY_USE_LINEAR_COLORSPACE` config is set to `true`.
+- (pro) Fix BlurHash generation when the `IMGPROXY_USE_LINEAR_COLORSPACE` config is set to `true`.
+- (pro) Fix detection of PDF files with a header offset.
+
+### Removed
+- Remove the `IMGPROXY_SVG_FIX_UNSUPPORTED` config. The problem it was solving is now fixed in librsvg.
 
 ## [3.28.0] - 2025-03-31
 ### Added
